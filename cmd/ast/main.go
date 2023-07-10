@@ -1,28 +1,22 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 )
 
-var srcCode = `
-package hello
-
-import "fmt"
-
-func greet() {
-    var msg = "Hello World!"
-    fmt.Println(msg)
-}
-`
-
 func main() {
+	var filePath string
+	flag.StringVar(&filePath, "file", "", "File path to scan ast")
+	flag.Parse()
+
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, "example/ipinfo.go", nil, 0)
+	f, err := parser.ParseFile(fset, filePath, nil, 0)
 	if err != nil {
-		fmt.Printf("err = %s", err)
+		fmt.Printf("Filepath=%s err = %s", filePath, err)
 	}
 	ast.Print(fset, f)
 }

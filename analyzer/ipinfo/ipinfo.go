@@ -2,8 +2,6 @@ package ipinfo
 
 import (
 	"go/ast"
-	"log"
-	"reflect"
 	"regexp"
 
 	"golang.org/x/tools/go/analysis"
@@ -11,7 +9,7 @@ import (
 	"golang.org/x/tools/go/ast/inspector"
 )
 
-var ipv4Reg = regexp.MustCompile(`^(\d{1,3})\.\d{1,3}\.\d{1,3}.\d{1,3}$`)
+var ipv4Reg = regexp.MustCompile(`^"(\d{1,3})\.\d{1,3}\.\d{1,3}.\d{1,3}"$`)
 
 const Doc = `check for hardcoded ip info in code`
 
@@ -26,45 +24,33 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	inspect := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
 	nodeFilter := []ast.Node{
-		(*ast.GenDecl)(nil),
+		(*ast.BasicLit)(nil),
 	}
 
-	log.Println("Start...", nodeFilter, "Inspect=", inspect)
-	inspect.Nodes(nodeFilter, func(n ast.Node, push bool) (proceed bool) {
-		log.Println("Got node:", n)
-		genDecl, ok := n.(*ast.GenDecl)
-		if !ok {
-			return true
+	inspect.Preorder(nodeFilter, func(n ast.Node) {
+		lit := n.(*ast.BasicLit)
+		matches := ipv4Reg.FindStringSubmatch(lit.Value)
+		if matches == nil {
+			return
 		}
 
-		for _, spec := range genDecl.Specs {
-			if valueSpec, ok := spec.(*ast.ValueSpec); ok {
-				for _, val := range valueSpec.Values {
-					lit := val.(*ast.BasicLit)
-					log.Println("String value=", lit.Value)
-					matches := ipv4Reg.FindAllStringSubmatch(lit.Value, -1)
-					if matches == nil {
-						return true
-					}
-					pass.Report(analysis.Diagnostic{
-						Pos:     lit.Pos(),
-						Message: "Hardcoded ip may become vulnerable to attacks",
-						SuggestedFixes: []analysis.SuggestedFix{
-							{
-								Message: "Put ip in config values",
-								TextEdits: []analysis.TextEdit{
-									{Pos: lit.Pos(), End: lit.Pos(), NewText: []byte{}},
-								},
-							},
-						},
-					})
-					log.Println(matches)
-				}
-			} else {
-				log.Println("Cannot cast to value spec:", spec, reflect.TypeOf(spec))
-			}
+		// Ignore loopback and masks, this won't cause security issues.
+		if matches[1] == "127" || matches[1] == "255" {
+			return
 		}
-		return true
+
+		pass.Report(analysis.Diagnostic{
+			Pos:     lit.Pos(),
+			Message: "Hardcoded ip may become vulnerable to attacks",
+			SuggestedFixes: []analysis.SuggestedFix{
+				{
+					Message: "Put ip in config values",
+					TextEdits: []analysis.TextEdit{
+						{Pos: lit.Pos(), End: lit.Pos(), NewText: []byte{}},
+					},
+				},
+			},
+		})
 	})
 	return nil, nil
 }
