@@ -2,8 +2,8 @@ package ipinfo
 
 import (
 	"go/ast"
-	"go/token"
 	"log"
+	"reflect"
 	"regexp"
 
 	"golang.org/x/tools/go/analysis"
@@ -26,34 +26,45 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	inspect := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
 	nodeFilter := []ast.Node{
-		(*ast.BasicLit)(nil),
+		(*ast.GenDecl)(nil),
 	}
 
-	//log.Println("Start...", nodeFilter)
-	inspect.Preorder(nodeFilter, func(n ast.Node) {
-		literal := n.(*ast.BasicLit)
-		if literal.Kind != token.STRING {
-			return
+	log.Println("Start...", nodeFilter, "Inspect=", inspect)
+	inspect.Nodes(nodeFilter, func(n ast.Node, push bool) (proceed bool) {
+		log.Println("Got node:", n)
+		genDecl, ok := n.(*ast.GenDecl)
+		if !ok {
+			return true
 		}
 
-		matches := ipv4Reg.FindAllStringSubmatch(literal.Value, -1)
-		if matches == nil {
-			return
+		for _, spec := range genDecl.Specs {
+			if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+				for _, val := range valueSpec.Values {
+					lit := val.(*ast.BasicLit)
+					log.Println("String value=", lit.Value)
+					matches := ipv4Reg.FindAllStringSubmatch(lit.Value, -1)
+					if matches == nil {
+						return true
+					}
+					pass.Report(analysis.Diagnostic{
+						Pos:     lit.Pos(),
+						Message: "Hardcoded ip may become vulnerable to attacks",
+						SuggestedFixes: []analysis.SuggestedFix{
+							{
+								Message: "Put ip in config values",
+								TextEdits: []analysis.TextEdit{
+									{Pos: lit.Pos(), End: lit.Pos(), NewText: []byte{}},
+								},
+							},
+						},
+					})
+					log.Println(matches)
+				}
+			} else {
+				log.Println("Cannot cast to value spec:", spec, reflect.TypeOf(spec))
+			}
 		}
-
-		pass.Report(analysis.Diagnostic{
-			Pos:     literal.Pos(),
-			Message: "Hardcoded ip may become vulnerable to attacks",
-			SuggestedFixes: []analysis.SuggestedFix{
-				{
-					Message: "Put ip in config values",
-					TextEdits: []analysis.TextEdit{
-						{Pos: literal.Pos(), End: literal.Pos(), NewText: []byte{}},
-					},
-				},
-			},
-		})
-		log.Println(matches)
+		return true
 	})
 	return nil, nil
 }
