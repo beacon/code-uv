@@ -14,7 +14,7 @@ func main() {
 	flag.Parse()
 
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, filePath, nil, 0)
+	f, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
 		fmt.Printf("Filepath=%s err = %s", filePath, err)
 	}

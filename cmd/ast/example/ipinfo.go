@@ -17,6 +17,8 @@ var (
 func DialPlace() {
 	http.Get(fmt.Sprintf("http://%s:%d", ip, port))
 	someIP := "192.168.0.22"
+	ipCommentedOut := "192.168.0.33" // IGNORE_CODE_SCAN: this ip is here for testing
+	http.Get(fmt.Sprintf("http://%s:%d", ipCommentedOut, port))
 	http.Get(fmt.Sprintf("http://%s:%d", someIP, port))
 	http.Get(fmt.Sprintf("http://%s:%d", maskIP, port))
 	http.Get(fmt.Sprintf("http://%s:%d", loopback, port))
